@@ -12,3 +12,17 @@ FIFO criaFifo(char *nome_fifo, int permissao){
     }
     
 }
+
+int abreFifo(char *nome_fifo, bool modo){
+    int fd;
+    if(modo == true)
+        fd = open(nome_fifo, O_WRONLY)
+    else
+        fd = open(nome_fifo, O_RDONLY)
+    if(fd < 0){
+        perror("\nErro ao criar FIFO");
+        unlink(nome_fifo)
+        exit(EXIT_FAILURE);
+    }
+    return fd;
+}

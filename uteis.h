@@ -28,5 +28,7 @@ typedef struct{
 }RESPOSTA
 
 FIFO criaFifo(char *nome_fifo, int permissao);
-bool verificaUsername(char username)
+int abreFifo(char *nome_fifo, bool modo);
+bool verificaUsername(char username);
+
 
