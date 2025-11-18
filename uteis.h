@@ -15,6 +15,7 @@
 //ctes
 #define TAM_MAX 256
 #define MAX_CLI 20
+#define TAM_USERNAME 30
 
 
 typedef struct {
@@ -29,6 +30,4 @@ typedef struct{
 
 FIFO criaFifo(char *nome_fifo, int permissao);
 int abreFifo(char *nome_fifo, bool modo);
-bool verificaUsername(char username);
-
 

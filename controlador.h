@@ -1,0 +1,1 @@
+bool verificaUsername(char username);
