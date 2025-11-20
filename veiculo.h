@@ -4,5 +4,5 @@
 
 typedef struct{
     char*matricula;
-}Veiculo
+}Veiculo;
 

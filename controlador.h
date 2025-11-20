@@ -1,1 +1,1 @@
-bool verificaUsername(char username);
+int verificaUsername(char username);

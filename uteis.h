@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 //named pipes
 #define FIFO_SERV "/tmp/dict_fifo" 
@@ -25,9 +26,9 @@ typedef struct {
 
 
 typedef struct{
-    char resposta[TAM_MAX]
-}RESPOSTA
+    char resposta[TAM_MAX];
+}RESPOSTA;
 
-FIFO criaFifo(char *nome_fifo, int permissao);
+void criaFifo(char *nome_fifo, int permissao);
 int abreFifo(char *nome_fifo, bool modo);
 

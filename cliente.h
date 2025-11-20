@@ -6,5 +6,5 @@ typedef struct{
     char*username;
     pid_t pid_cli;
     Veiculo *automovel;
-}Cliente
+}Cliente;
 
