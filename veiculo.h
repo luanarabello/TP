@@ -2,7 +2,9 @@
 #include "cliente.h"
 #include "uteis.h"
 
-typedef struct{
-    char*matricula;
-}Veiculo;
+typedef struct
+{
+    char *matricula;
+    float kms_totais;
 
+} Veiculo;

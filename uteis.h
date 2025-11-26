@@ -9,26 +9,47 @@
 #include <ctype.h>
 #include <stdbool.h>
 
-//named pipes
-#define FIFO_SERV "/tmp/dict_fifo" 
+// named pipes
+#define FIFO_SERV "/tmp/dict_fifo"
 #define FIFO_CLI "/tmp/resp_%d_fifo"
 
-//ctes
-#define TAM_MAX 256
-#define MAX_CLI 20
-#define TAM_USERNAME 30
+// ctes
+#define TAM_MAX 40
+#define MAX_CLI 30
+#define TAM_USER 30
+#define MAX_VEICULOS 10
 
+typedef struct
+{
+    char username[TAM_USER];
+    int pid_cli;
+    // Veiculo *automovel;
+} Cliente;
 
-typedef struct {
-    pid_t pid_cliente;
-    char comando[TAM_MAX];
+typedef struct
+{
+    int horas, minutos, segundos;
+} Hora;
+
+typedef struct
+{
+    char cmd[TAM_MAX];
+    char *partida, *destino;
+    Hora hora;
+    int distancia;
+    int id, pid_cli;
+
 } PEDIDO;
 
-
-typedef struct{
+typedef struct
+{
     char resposta[TAM_MAX];
-}RESPOSTA;
+    Hora inicio_servico;
+    int percorrido;
+    bool fim;
+} RESPOSTA;
 
-void criaFifo(char *nome_fifo, int permissao);
+void criaFifo(char *nome_fifo);
 int abreFifo(char *nome_fifo, bool modo);
 
+Cliente tab_clientes[MAX_CLI];
