@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <signal.h>
 
 // named pipes
 #define FIFO_SERV "/tmp/dict_fifo"
@@ -49,7 +50,6 @@ typedef struct
     bool fim;
 } RESPOSTA;
 
-void criaFifo(char *nome_fifo);
+void criaFifo(const char *nome_fifo);
 int abreFifo(char *nome_fifo, bool modo);
-
-Cliente tab_clientes[MAX_CLI];
+void verificaUsername(char *username, Cliente *base);

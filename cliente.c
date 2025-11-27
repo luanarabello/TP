@@ -1,31 +1,5 @@
+#include "uteis.h"
 #include "cliente.h"
-
-void verificaUsername(char *username, Cliente *base)
-{
-    int i;
-    for (i = 0; i < MAX_CLI; i++)
-    {
-        if (base[i].username[0] != '\0' && strcmp(username, base[i].username) == 0)
-        {
-            printf("Esse user ja existe. Insira outro:\n");
-            return;
-        }
-    }
-    printf("\nUsuario cadastrado!\n");
-    for (i = 0; i < MAX_CLI; i++)
-        if (strcmp(base[i].username, "0") == 0)
-        {
-            strcpy(base[i].username, username);
-            break;
-        }
-
-    printf("\n--- Tabela Atualizada ---\n");
-    for (i = 0; i < MAX_CLI; i++)
-    {
-        if (strcmp(base[i].username, "0") != 0)
-            printf("[%d]: %s\n", i, base[i].username);
-    }
-}
 
 int main(int argc, char *argv[])
 {
@@ -81,7 +55,7 @@ int main(int argc, char *argv[])
 
     do
     {
-
+        ;
     } while (strcmp(p.cmd, "terminar") != 0);
     exit(0);
 }

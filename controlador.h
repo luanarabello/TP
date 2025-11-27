@@ -1,1 +1,0 @@
-void verificaUsername(char username);

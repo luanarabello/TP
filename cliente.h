@@ -1,2 +1,2 @@
 #include <stdio.h>
-#include "uteis.h"
+void verificaUsername(char *username, Cliente *base);
