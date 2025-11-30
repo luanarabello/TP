@@ -1,5 +1,5 @@
 #include "uteis.h"
-#include "cliente.h"
+// #include "cliente.h"
 
 int main(int argc, char *argv[])
 {
@@ -7,6 +7,7 @@ int main(int argc, char *argv[])
     char nome_fifo_cli[25];
     RESPOSTA r;
     PEDIDO p;
+    Cliente cliente;
 
     if (access(FIFO_SERV, F_OK))
     {
@@ -14,29 +15,17 @@ int main(int argc, char *argv[])
         exit(3);
     }
 
-    // verificação de user
-    if (argc < 2)
-    {
-        printf("Erro: informe o nome de usuario\n");
-        return -1;
-    }
-    if (strlen(argv[1]) < TAM_USER)
-    {
-        verificaUsername(argv[1], tab_clientes);
-    }
-    else
-    {
-        printf("Username em uso ou muito longo.");
-        return -1;
-    }
-
-    // abrir fifo do servidor
     fd_serv = open(FIFO_SERV, O_WRONLY);
     if (fd_serv == -1)
     {
         fprintf(stderr, "\nO servidor não está a correr\n");
         unlink(nome_fifo_cli);
         exit(EXIT_FAILURE);
+    }
+
+    if (argc != 2)
+    {
+        printf("Uso: ./cliente <username>");
     }
 
     p.pid_cli = getpid();
@@ -57,5 +46,7 @@ int main(int argc, char *argv[])
     {
         ;
     } while (strcmp(p.cmd, "terminar") != 0);
+    close(fd_cli);
+    unlink(FIFO_CLI);
     exit(0);
 }

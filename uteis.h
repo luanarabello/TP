@@ -9,21 +9,24 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <signal.h>
+#include <pthread.h>
 
 // named pipes
 #define FIFO_SERV "/tmp/dict_fifo"
 #define FIFO_CLI "/tmp/resp_%d_fifo"
 
 // ctes
-#define TAM_MAX 40
+#define TAM_MAX 256
 #define MAX_CLI 30
 #define TAM_USER 30
 #define MAX_VEICULOS 10
+#define NOME_FIFO 256
 
 typedef struct
 {
     char username[TAM_USER];
     int pid_cli;
+    char fifo_cliente[NOME_FIFO];
     // Veiculo *automovel;
 } Cliente;
 
@@ -39,6 +42,7 @@ typedef struct
     Hora hora;
     int distancia;
     int id, pid_cli;
+    char username[TAM_USER];
 
 } PEDIDO;
 
@@ -50,6 +54,11 @@ typedef struct
     bool fim;
 } RESPOSTA;
 
+typedef struct
+{
+    int continua;
+} TDATA;
+
 void criaFifo(const char *nome_fifo);
 int abreFifo(char *nome_fifo, bool modo);
-void verificaUsername(char *username, Cliente *base);
+// int verificaUsername(char *username, Cliente *base, int *total);

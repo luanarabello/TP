@@ -12,13 +12,47 @@ void trataSig(int i)
     exit(EXIT_SUCCESS); /* para terminar o processo */
 }
 
+int verificaUsername(char *username, Cliente *base, int *total)
+{
+    int i;
+    for (i = 0; i < MAX_CLI; i++)
+    {
+        if (base[i].username[0] != '\0' && strcmp(username, base[i].username) == 0)
+        {
+            // printf("Esse user ja existe. Insira outro:\n");
+            return 0;
+        }
+    }
+    if ((*total) < MAX_CLI)
+    {
+        printf("\nUsuario cadastrado!\n");
+        for (i = 0; i < MAX_CLI; i++)
+            if (strcmp(base[i].username, "0") == 0)
+            {
+                strcpy(base[i].username, username);
+                break;
+            }
+
+        printf("\n--- Tabela Atualizada ---\n");
+        for (i = 0; i < MAX_CLI; i++)
+        {
+            if (strcmp(base[i].username, "0") != 0)
+                printf("[%d]: %s\n", i, base[i].username);
+        }
+        (*total)++;
+        return 1;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     int i, nBytes, num_clientes;
-    char cmd[TAM_MAX];
-    PEDIDO p;
-    RESPOSTA r;
+    char cmd[TAM_MAX], nome_fifo_cli[25];
+    PEDIDO ped;
+    RESPOSTA res;
+    Cliente cliente;
     Cliente tab_clientes[MAX_CLI];
+    pthread_t tid_1;
 
     // só para testar username
     for (i = 0; i < MAX_CLI; i++)
@@ -38,11 +72,45 @@ int main(int argc, char *argv[])
     }
 
     criaFifo(FIFO_SERV); // cria fifo do servidor
-    printf("A espera de clientes...");
+    printf("A espera de clientes...\n");
     fd_s = open(FIFO_SERV, O_RDWR);
+    if (fd_s == -1)
+    {
+        perror("\nErro ao abrir o FIFO do servidor (RDWR/blocking)");
+        exit(EXIT_FAILURE);
+    }
+    fprintf(stderr, "\nFIFO aberto para READ (+WRITE) bloqueante");
 
     do
     {
+        char buffer[sizeof(Cliente) > sizeof(PEDIDO) ? sizeof(Cliente) : sizeof(PEDIDO)];
+        nBytes = read(fd_s, buffer, sizeof(buffer));
+
+        if (nBytes < sizeof(ped))
+        {
+            fprintf(stderr, "\nRecebido pedido incompleto "
+                            "[bytes lidos: %d]",
+                    nBytes);
+            continue; /* não responde a cliente e pula para a próxima iteração */
+        }
+
+        if (nBytes == sizeof(Cliente))
+        {
+            memcpy(&cliente, buffer, sizeof(Cliente));
+            fd_c = open(FIFO_CLI, O_WRONLY);
+            int valida = verificaUsername(cliente.username, tab_clientes, &num_clientes);
+            if (valida == 1)
+            {
+                char confirmacao[TAM_MAX] = "[CONTROLADOR]: Esse user ja existe. Insira outro:\n";
+                write(fd_c, confirmacao, strlen(confirmacao));
+            }
+            else
+            {
+                char confirmacao[TAM_MAX] = "[CONTROLADOR]: Cliente cadastrado\n";
+                write(fd_c, confirmacao, strlen(confirmacao));
+            }
+            close(fd_c);
+        }
 
         scanf("%s", cmd);
         if (strcmp(cmd, "listar") == 0)
@@ -60,10 +128,6 @@ int main(int argc, char *argv[])
         if (strcmp(cmd, "hora") == 0)
             ;
 
-        // nBytes = read(fd_s, &p, sizeof(p));
-        // if (nBytes == sizeof(PEDIDO))
-        // {
-        // }
     } while (strcmp(cmd, "terminar") != 0);
 
     close(fd_s);
