@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "uteis.h"
 
 int fd_s, fd_c;
@@ -11,53 +10,90 @@ void trataSig(int i)
     unlink(FIFO_SERV);
     exit(EXIT_SUCCESS); /* para terminar o processo */
 }
-
-int verificaUsername(char *username, Cliente *base, int *total)
-{
+int utilizador_existe(char *user, Cliente *clientes, int total) {
     int i;
-    for (i = 0; i < MAX_CLI; i++)
-    {
-        if (base[i].username[0] != '\0' && strcmp(username, base[i].username) == 0)
-        {
-            // printf("Esse user ja existe. Insira outro:\n");
-            return 0;
-        }
-    }
-    if ((*total) < MAX_CLI)
-    {
-        printf("\nUsuario cadastrado!\n");
-        for (i = 0; i < MAX_CLI; i++)
-            if (strcmp(base[i].username, "0") == 0)
-            {
-                strcpy(base[i].username, username);
-                break;
-            }
+    for (i = 0; i < total; i++)
+        if (clientes[i].ativo && strcmp(clientes[i].username, user) == 0)
+            return 1;
+    return 0;
+}
 
-        printf("\n--- Tabela Atualizada ---\n");
-        for (i = 0; i < MAX_CLI; i++)
-        {
-            if (strcmp(base[i].username, "0") != 0)
-                printf("[%d]: %s\n", i, base[i].username);
+int adiciona_cliente(char *user, Cliente *clientes, char *fifo, int* total) {
+    if (total_clientes >= MAX_CLI) return 0;
+
+    strcpy(clientes[*total].username, user);
+    strcpy(clientes[*total].fifo_cli, fifo);
+    clientes[*total].ativo = true;
+    (*total)++;
+    return 1;
+}
+void *thread_clientes(void *arg) {
+    PEDIDO p;
+    int verifica;
+    while (1) {
+        if (read(fd_serv, &p, sizeof(PEDIDO)) <= 0)
+            continue;
+
+        if (p.tipo == REQ_LOGIN) {
+            verifica = 0;
+
+            if (!username_existe(p.username))
+                verifica = adiciona_cliente(p.username, p.fifo_cli);
+
+            int fd_cli = open(p.fifo_cli, O_WRONLY);
+            if (fd_cli < 0) continue;
+
+            if (verifica)
+                write(fd_cli, "LOGIN_OK\n", 9);
+            else
+                write(fd_cli, "LOGIN_ERRO\n", 11);
+
+            close(fd_cli);
         }
-        (*total)++;
-        return 1;
+
+        // restantes pedidos
+    }
+}
+void *thread_admin(void *arg) {
+    char cmd[32];
+
+    while (1) {
+        scanf("%s", cmd);
+
+        if (strcmp(cmd, "utiliz") == 0) {
+            printf("Clientes ativos:\n");
+            for (int i = 0; i < MAX_CLI; i++)
+                if (clientes[i].ativo)
+                    printf("%s\n", clientes[i].username);
+            continue;
+        }
+
+        if (strcmp(cmd, "terminar") == 0) {
+            unlink(FIFO_SERV);
+            exit(0);
+        }
     }
 }
 
+
 int main(int argc, char *argv[])
 {
-    int i, nBytes, num_clientes;
+    int i, nBytes, num_clientes, hora, nveiculos;
     char cmd[TAM_MAX], nome_fifo_cli[25];
     PEDIDO ped;
     RESPOSTA res;
     Cliente cliente;
     Cliente tab_clientes[MAX_CLI];
     pthread_t tid_1;
-
-    // só para testar username
-    for (i = 0; i < MAX_CLI; i++)
-    {
-        strcpy(tab_clientes[i].username, "0");
+    char *env = getenv("NVEICULOS");
+    if (env == NULL) {
+        fprintf(stderr, "Erro: variável de ambiente NVEICULOS não definida\n");
+        exit(1);
+    }
+    nveiculos = atoi(env);
+    if (nveiculos <= 0 || nveiculos > MAX_VEICULOS) {
+        fprintf(stderr, "Erro: valor inválido de NVEICULOS\n");
+        exit(1);
     }
 
     strcpy(tab_clientes[0].username, "Amanda");

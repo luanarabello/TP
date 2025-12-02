@@ -1,3 +1,6 @@
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,38 +15,41 @@
 #include <pthread.h>
 
 // named pipes
-#define FIFO_SERV "/tmp/dict_fifo"
-#define FIFO_CLI "/tmp/resp_%d_fifo"
+#define FIFO_SERV "/tmp/fifo_ctrl"
+#define FIFO_CLI_FMT "/tmp/fifo_cli_%s"
 
 // ctes
 #define TAM_MAX 256
 #define MAX_CLI 30
 #define TAM_USER 30
-#define MAX_VEICULOS 10
+#define MAX_VEI 10
 #define NOME_FIFO 256
+
+
+//tipos de pedido
+#define REQ_AGENDAR 1
+#define REQ_CANCELAR 2
+#define REQ_CONSULTAR 3
+#define REQ_TERMINAR 4
 
 typedef struct
 {
     char username[TAM_USER];
-    int pid_cli;
+    //int pid_cli; -acho que nao é preciso
     char fifo_cliente[NOME_FIFO];
+    bool ativo;
     // Veiculo *automovel;
 } Cliente;
 
-typedef struct
-{
-    int horas, minutos, segundos;
-} Hora;
 
 typedef struct
 {
-    char cmd[TAM_MAX];
-    char *partida, *destino;
-    Hora hora;
-    int distancia;
-    int id, pid_cli;
+    int tipo;                          // REQ_.....
     char username[TAM_USER];
-
+    char fifo_cli[TAM_FIFO];
+    int hora;
+    int distancia;                 
+    int id_servico;
 } PEDIDO;
 
 typedef struct
@@ -54,11 +60,9 @@ typedef struct
     bool fim;
 } RESPOSTA;
 
-typedef struct
-{
-    int continua;
-} TDATA;
 
 void criaFifo(const char *nome_fifo);
 int abreFifo(char *nome_fifo, bool modo);
 // int verificaUsername(char *username, Cliente *base, int *total);
+
+#endif
