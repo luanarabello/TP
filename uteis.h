@@ -22,33 +22,32 @@
 #define TAM_MAX 256
 #define MAX_CLI 30
 #define TAM_USER 30
-#define MAX_VEI 10
+#define MAX_VEICULOS 10
 #define NOME_FIFO 256
 
-
-//tipos de pedido
+// tipos de pedido
 #define REQ_AGENDAR 1
 #define REQ_CANCELAR 2
 #define REQ_CONSULTAR 3
 #define REQ_TERMINAR 4
+#define REQ_LOGIN 5
 
 typedef struct
 {
     char username[TAM_USER];
-    //int pid_cli; -acho que nao é preciso
+    // int pid_cli; -acho que nao é preciso
     char fifo_cliente[NOME_FIFO];
     bool ativo;
     // Veiculo *automovel;
 } Cliente;
 
-
 typedef struct
 {
-    int tipo;                          // REQ_.....
+    int tipo; // REQ_.....
     char username[TAM_USER];
-    char fifo_cli[TAM_FIFO];
+    char fifo_cli[NOME_FIFO];
     int hora;
-    int distancia;                 
+    int distancia;
     int id_servico;
 } PEDIDO;
 
@@ -60,6 +59,21 @@ typedef struct
     bool fim;
 } RESPOSTA;
 
+typedef struct
+{
+    int segundos;
+} Hora;
+
+typedef struct
+{
+    Cliente *clientes;
+} TDATA_ADMIN;
+
+typedef struct
+{
+    Cliente *clientes;
+    int total_clientes;
+} TDATA_CLIENTES;
 
 void criaFifo(const char *nome_fifo);
 int abreFifo(char *nome_fifo, bool modo);

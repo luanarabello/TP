@@ -28,10 +28,10 @@ int main(int argc, char *argv[])
         printf("Uso: ./cliente <username>");
     }
 
-    p.pid_cli = getpid();
-    sprintf(nome_fifo_cli, FIFO_CLI, p.pid_cli);
-    criaFifo(FIFO_CLI);
-    fd_cli = open(FIFO_CLI, O_RDWR);
+    // p.pid_cli = getpid();
+    // sprintf(nome_fifo_cli, FIFO_CLI_FMT, p.pid_cli);
+    criaFifo(FIFO_CLI_FMT);
+    fd_cli = open(FIFO_CLI_FMT, O_RDWR);
     if (fd_cli == -1)
     {
         perror("\nErro nao abrir o FIFO do cliente");
@@ -42,11 +42,11 @@ int main(int argc, char *argv[])
 
     printf("O que gostaria de realizar?\n -agendar\n -cancelar\n -consultar\n -entrar\n -sair\n -terminar\n");
 
-    do
-    {
-        ;
-    } while (strcmp(p.cmd, "terminar") != 0);
+    // do
+    // {
+    //     ;
+    // } while ();
     close(fd_cli);
-    unlink(FIFO_CLI);
+    unlink(FIFO_CLI_FMT);
     exit(0);
 }

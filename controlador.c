@@ -10,7 +10,9 @@ void trataSig(int i)
     unlink(FIFO_SERV);
     exit(EXIT_SUCCESS); /* para terminar o processo */
 }
-int utilizador_existe(char *user, Cliente *clientes, int total) {
+
+int utilizador_existe(char *user, Cliente *clientes, int total)
+{
     int i;
     for (i = 0; i < total; i++)
         if (clientes[i].ativo && strcmp(clientes[i].username, user) == 0)
@@ -18,30 +20,38 @@ int utilizador_existe(char *user, Cliente *clientes, int total) {
     return 0;
 }
 
-int adiciona_cliente(char *user, Cliente *clientes, char *fifo, int* total) {
-    if (total_clientes >= MAX_CLI) return 0;
+int adiciona_cliente(char *user, Cliente *clientes, char *fifo, int *total)
+{
+    if ((*total) >= MAX_CLI)
+        return 0;
 
     strcpy(clientes[*total].username, user);
-    strcpy(clientes[*total].fifo_cli, fifo);
+    strcpy(clientes[*total].fifo_cliente, fifo);
     clientes[*total].ativo = true;
     (*total)++;
     return 1;
 }
-void *thread_clientes(void *arg) {
+
+void *thread_clientes(void *arg)
+{
+    TDATA_CLIENTES *ptd = (TDATA_CLIENTES *)arg;
     PEDIDO p;
     int verifica;
-    while (1) {
-        if (read(fd_serv, &p, sizeof(PEDIDO)) <= 0)
+    while (1)
+    {
+        if (read(fd_s, &p, sizeof(PEDIDO)) <= 0)
             continue;
 
-        if (p.tipo == REQ_LOGIN) {
+        if (p.tipo == REQ_LOGIN)
+        {
             verifica = 0;
 
             if (!username_existe(p.username))
-                verifica = adiciona_cliente(p.username, p.fifo_cli);
+                verifica = adiciona_cliente(p.username, ptd->clientes, p.fifo_cli, &ptd->total_clientes);
 
             int fd_cli = open(p.fifo_cli, O_WRONLY);
-            if (fd_cli < 0) continue;
+            if (fd_cli < 0)
+                continue;
 
             if (verifica)
                 write(fd_cli, "LOGIN_OK\n", 9);
@@ -54,27 +64,31 @@ void *thread_clientes(void *arg) {
         // restantes pedidos
     }
 }
-void *thread_admin(void *arg) {
+void *thread_admin(void *arg)
+{
+    TDATA_ADMIN *ptd = (TDATA_ADMIN *)arg;
     char cmd[32];
 
-    while (1) {
+    while (1)
+    {
         scanf("%s", cmd);
 
-        if (strcmp(cmd, "utiliz") == 0) {
+        if (strcmp(cmd, "utiliz") == 0)
+        {
             printf("Clientes ativos:\n");
             for (int i = 0; i < MAX_CLI; i++)
-                if (clientes[i].ativo)
-                    printf("%s\n", clientes[i].username);
+                if (ptd->clientes[i].ativo)
+                    printf("%s\n", ptd->clientes[i].username);
             continue;
         }
 
-        if (strcmp(cmd, "terminar") == 0) {
+        if (strcmp(cmd, "terminar") == 0)
+        {
             unlink(FIFO_SERV);
             exit(0);
         }
     }
 }
-
 
 int main(int argc, char *argv[])
 {
@@ -84,14 +98,27 @@ int main(int argc, char *argv[])
     RESPOSTA res;
     Cliente cliente;
     Cliente tab_clientes[MAX_CLI];
-    pthread_t tid_1;
-    char *env = getenv("NVEICULOS");
-    if (env == NULL) {
+
+    pthread_t tid_1, tid_2;
+    TDATA_ADMIN t1_data;    // admin
+    TDATA_CLIENTES t2_data; // user
+    t1_data.clientes = tab_clientes;
+
+    t2_data.clientes = tab_clientes;
+    t2_data.total_clientes = sizeof(tab_clientes) / sizeof(Cliente);
+
+    pthread_create(&tid_1, NULL, thread_admin, (void *)&t1_data);
+    pthread_create(&tid_2, NULL, thread_clientes, (void *)&t2_data);
+
+    char *env = getenv("NVEICULOS"); // env é envio
+    if (env == NULL)
+    {
         fprintf(stderr, "Erro: variável de ambiente NVEICULOS não definida\n");
         exit(1);
     }
     nveiculos = atoi(env);
-    if (nveiculos <= 0 || nveiculos > MAX_VEICULOS) {
+    if (nveiculos <= 0 || nveiculos > MAX_VEICULOS)
+    {
         fprintf(stderr, "Erro: valor inválido de NVEICULOS\n");
         exit(1);
     }
@@ -133,7 +160,7 @@ int main(int argc, char *argv[])
         if (nBytes == sizeof(Cliente))
         {
             memcpy(&cliente, buffer, sizeof(Cliente));
-            fd_c = open(FIFO_CLI, O_WRONLY);
+            fd_c = open(FIFO_CLI_FMT, O_WRONLY);
             int valida = verificaUsername(cliente.username, tab_clientes, &num_clientes);
             if (valida == 1)
             {
