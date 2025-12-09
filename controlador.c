@@ -134,7 +134,7 @@ void *thread_clientes(void *arg)
 
                         if (nova_resposta == NULL)
                         {
-                            perror("Erro ao realocar memória para resposta².");
+                            perror("Erro ao realocar memória para resposta - resposta truncada.");
                             close(fd_cli);
                             free(resposta);
                             // Deve-se fechar o FIFO e dar free em resposta antes de sair
@@ -155,7 +155,68 @@ void *thread_clientes(void *arg)
 
         if (p.tipo == REQ_CANCELAR)
         {
-            ;
+            Servico *aux = ptd->lista_servicos;
+            int i, n, fd_cli, serv_cancelados = 0;
+            char resposta[TAM_MAX];
+            bool encontrado = false;
+            fd_cli = abreFifo(p.fifo_cli, true);
+
+            for (i = 0; i < ptd->total_servicos; i++)
+            {
+                if (strcmp(aux[i].nome_cliente, p.username) == 0)
+                {
+                    encontrado = true;
+                    if (p.id_servico == 0)
+                    { // cancelar todos
+                        if (aux[i].estado == 0)
+                        {
+                            aux[i].estado = 2;
+                            serv_cancelados++;
+                        }
+                    }
+                    else if (aux[i].id == p.id_servico)
+                    {
+                        if (aux[i].estado == 0)
+                        {
+                            aux[i].estado = 2; // cancelado/concluido
+                            serv_cancelados++;
+                            sprintf(resposta, "[CONTROLADOR]: Serviço de id %d cancelado com sucesso.\n", aux[i].id);
+                            break;
+                        }
+                        else if (aux[i].estado == 1) // servico em curso nao podem ser cancelados
+                        {
+                            sprintf(resposta, "[CONTROLADOR]: Erro: Serviço %d esta em curso e não pode ser cancelado.\n", p.id_servico);
+                        }
+                        else if (aux[i].estado == 2) // servico ja foi cancelado
+                        {
+                            sprintf(resposta, "[CONTROLADOR]: Erro: Serviço %d ja se encontra cancelado ou concluido.\n", p.id_servico);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (strlen(resposta) == 0)
+            {
+                if (p.id_servico == 0)
+                {
+                    if (encontrado)
+                        sprintf(resposta, "[CONTROLADOR]: Todos os serviços foram cancelados com sucesso.\n");
+                    else
+                        sprintf(resposta, "[CONTROLADOR]: Nao ha serviços agendados.");
+                }
+                else
+                {
+                    sprintf(resposta, "[CONTROLADOR]: Erro: servico %d nao encontrado ou nao pertence a utilizador %s", p.id_servico, p.username);
+                }
+            }
+
+            n = write(fd_cli, resposta, strlen(resposta) + 1);
+            if (n != strlen(resposta) + 1)
+            {
+                fprintf(stderr, "Erro: mensagem truncada.");
+            }
+            close(fd_cli);
         }
 
         if (p.tipo == REQ_TERMINAR)
