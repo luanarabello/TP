@@ -35,18 +35,18 @@ int adiciona_cliente(char *user, Cliente *clientes, char *fifo, int *total)
 void *thread_clientes(void *arg)
 {
     TDATA_CLIENTES *ptd = (TDATA_CLIENTES *)arg;
-    PEDIDO p;
+    Pedido p; //?
     int verifica;
     while (1)
     {
-        if (read(fd_s, &p, sizeof(PEDIDO)) <= 0)
+        if (read(fd_s, &p, sizeof(Pedido)) <= 0)
             continue;
 
         if (p.tipo == REQ_LOGIN)
         {
             verifica = 0;
 
-            if (!username_existe(p.username))
+            if (!utilizador_existe(p.username, ptd->clientes, ptd->total_clientes))
                 verifica = adiciona_cliente(p.username, ptd->clientes, p.fifo_cli, &ptd->total_clientes);
 
             int fd_cli = open(p.fifo_cli, O_WRONLY);
@@ -61,9 +61,112 @@ void *thread_clientes(void *arg)
             close(fd_cli);
         }
 
-        // restantes pedidos
+        if (p.tipo == REQ_AGENDAR)
+        {
+            char resposta[TAM_MAX];
+
+            // verificação para saber se há veiculos disponiveis!!
+
+            Servico *novo = &ptd->lista_servicos[ptd->total_servicos];
+            if (novo != NULL)
+            {
+                novo->id = ptd->total_servicos + 1;
+                strcpy(novo->nome_cliente, p.username);
+                novo->estado = 0; // agendado...
+                novo->percorrido = 0;
+
+                // passados pela linha de args
+                novo->inicio_servico.segundos = p.hora;
+                novo->dist_total = p.distancia;
+                strcpy(novo->local_partida, p.local_partida);
+
+                ptd->total_servicos++;
+
+                // Mensagem de sucesso
+                sprintf(resposta, "[CONTROLADOR]: Servico %d agendado com sucesso para a hora %d!\n", novo->id, novo->inicio_servico.segundos);
+            }
+            else
+            {
+                sprintf(resposta, "[CONTROLADOR]: Erro ao agendar novo servico\n");
+                printf("Erro ao agendar servico");
+            }
+            int fd_cli;
+            fd_cli = abreFifo(p.fifo_cli, true);           // true é para escrita
+            write(fd_cli, resposta, strlen(resposta) + 1); // para incluir o '\0'
+            close(fd_cli);
+        }
+
+        if (p.tipo == REQ_CONSULTAR)
+        {
+            int fd_cli, i;
+
+            size_t tam_resposta = TAM_MAX;
+            char *resposta = malloc(tam_resposta);
+            char temp[TAM_MAX];
+
+            if (resposta == NULL)
+            {
+                perror("Erro ao alocar memória para resposta");
+                continue;
+            }
+            resposta[0] = '\0';
+
+            fd_cli = abreFifo(p.fifo_cli, true);
+
+            sprintf(resposta, "\n--- Serviços Agendados para %s ---\n", p.username);
+
+            for (i = 0; i < ptd->total_servicos; i++)
+            {
+                Servico *s = &ptd->lista_servicos[i];
+
+                if (strcmp(s->nome_cliente, p.username) == 0)
+                { // achar os serviços solicitados pelo cliente que fez o pedido
+                    char *info_estado = (s->estado == 0) ? "Agendado" : (s->estado == 1) ? "Em curso"
+                                                                                         : "Concluido";
+                    sprintf(temp, "ID do Servico: %d | Hora: %d | Local de Partida: %s | Distância Total: %d km | Estado: %s\n", s->id, s->inicio_servico.segundos, s->local_partida, s->dist_total, info_estado);
+
+                    size_t novo_tam_resposta = strlen(resposta) + strlen(temp) + 1; // +1 pro '\0'
+
+                    // verificação de overflow do buffer
+                    if (novo_tam_resposta > tam_resposta)
+                    {
+                        char *nova_resposta = realloc(resposta, novo_tam_resposta);
+
+                        if (nova_resposta == NULL)
+                        {
+                            perror("Erro ao realocar memória para resposta².");
+                            close(fd_cli);
+                            free(resposta);
+                            // Deve-se fechar o FIFO e dar free em resposta antes de sair
+                            // ...
+                            break;
+                        }
+
+                        resposta = nova_resposta;
+                        tam_resposta = novo_tam_resposta;
+                    }
+                    strcat(resposta, temp);
+                }
+            }
+            write(fd_cli, resposta, strlen(resposta) + 1);
+            close(fd_cli);
+            free(resposta);
+        }
+
+        if (p.tipo == REQ_CANCELAR)
+        {
+            ;
+        }
+
+        if (p.tipo == REQ_TERMINAR)
+        {
+            ;
+        }
     }
+
+    // restantes pedidos
 }
+
 void *thread_admin(void *arg)
 {
     TDATA_ADMIN *ptd = (TDATA_ADMIN *)arg;
@@ -94,8 +197,7 @@ int main(int argc, char *argv[])
 {
     int i, nBytes, num_clientes, hora, nveiculos;
     char cmd[TAM_MAX], nome_fifo_cli[25];
-    PEDIDO ped;
-    RESPOSTA res;
+    Pedido ped;
     Cliente cliente;
     Cliente tab_clientes[MAX_CLI];
 
@@ -109,6 +211,12 @@ int main(int argc, char *argv[])
 
     pthread_create(&tid_1, NULL, thread_admin, (void *)&t1_data);
     pthread_create(&tid_2, NULL, thread_clientes, (void *)&t2_data);
+
+    if (signal(SIGINT, trataSig) == SIG_ERR)
+    {
+        perror("\nNao foi possivel configurar o sinal SIGINT\n");
+        exit(EXIT_FAILURE);
+    }
 
     char *env = getenv("NVEICULOS"); // env é envio
     if (env == NULL)
@@ -128,12 +236,6 @@ int main(int argc, char *argv[])
     strcpy(tab_clientes[2].username, "Luis");
     //
 
-    if (signal(SIGINT, trataSig) == SIG_ERR)
-    {
-        perror("\nNao foi possivel configurar o sinal SIGINT\n");
-        exit(EXIT_FAILURE);
-    }
-
     criaFifo(FIFO_SERV); // cria fifo do servidor
     printf("A espera de clientes...\n");
     fd_s = open(FIFO_SERV, O_RDWR);
@@ -146,7 +248,7 @@ int main(int argc, char *argv[])
 
     do
     {
-        char buffer[sizeof(Cliente) > sizeof(PEDIDO) ? sizeof(Cliente) : sizeof(PEDIDO)];
+        char buffer[sizeof(Cliente) > sizeof(Pedido) ? sizeof(Cliente) : sizeof(Pedido)];
         nBytes = read(fd_s, buffer, sizeof(buffer));
 
         if (nBytes < sizeof(ped))

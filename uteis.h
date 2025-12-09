@@ -43,26 +43,32 @@ typedef struct
 
 typedef struct
 {
+    int segundos;
+} Hora;
+
+typedef struct
+{
+    Hora inicio_servico;
+    int percorrido;
+    int estado; // 0: agendado; 1: em curso; 2: concluído/cancelado
+    int id;
+    char nome_cliente[TAM_USER];
+    char local_partida[TAM_MAX];
+    int dist_total;
+    pid_t pid_cli;
+} Servico;
+
+typedef struct
+{
     int tipo; // REQ_.....
     char username[TAM_USER];
     char fifo_cli[NOME_FIFO];
     int hora;
     int distancia;
     int id_servico;
-} PEDIDO;
-
-typedef struct
-{
-    char resposta[TAM_MAX];
-    Hora inicio_servico;
-    int percorrido;
-    bool fim;
-} RESPOSTA;
-
-typedef struct
-{
-    int segundos;
-} Hora;
+    char local_partida[TAM_MAX];
+    pid_t pid_cli; // cliente que agenda;
+} Pedido;
 
 typedef struct
 {
@@ -73,6 +79,9 @@ typedef struct
 {
     Cliente *clientes;
     int total_clientes;
+    Servico *lista_servicos;
+    int total_servicos;
+
 } TDATA_CLIENTES;
 
 void criaFifo(const char *nome_fifo);

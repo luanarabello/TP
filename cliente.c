@@ -5,8 +5,7 @@ int main(int argc, char *argv[])
 {
     int fd_cli, fd_serv, nBytes;
     char nome_fifo_cli[25];
-    RESPOSTA r;
-    PEDIDO p;
+    Pedido p;
     Cliente cliente;
 
     if (access(FIFO_SERV, F_OK))
