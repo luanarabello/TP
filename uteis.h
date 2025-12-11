@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include <unistd.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -48,7 +49,7 @@ typedef struct
 
 typedef struct
 {
-    Hora inicio_servico;
+Hora inicio_servico;
     int percorrido;
     int estado; // 0: agendado; 1: em curso; 2: concluído/cancelado
     int id;
@@ -56,6 +57,10 @@ typedef struct
     char local_partida[TAM_MAX];
     int dist_total;
     pid_t pid_cli;
+
+    
+    pid_t pid_veiculo; // Para o controlador saber quem matar 
+    int pipe_fd;
 } Servico;
 
 typedef struct
