@@ -49,7 +49,7 @@ typedef struct
 
 typedef struct
 {
-Hora inicio_servico;
+    Hora inicio_servico;
     int percorrido;
     int estado; // 0: agendado; 1: em curso; 2: concluído/cancelado
     int id;
@@ -58,8 +58,7 @@ Hora inicio_servico;
     int dist_total;
     pid_t pid_cli;
 
-    
-    pid_t pid_veiculo; // Para o controlador saber quem matar 
+    pid_t pid_veiculo; // Para o controlador saber quem matar
     int pipe_fd;
 } Servico;
 
@@ -88,6 +87,12 @@ typedef struct
     int total_servicos;
 
 } TDATA_CLIENTES;
+
+typedef struct
+{
+    pthread_t tid_main;
+    char *nome_fifo;
+} TDATA_READ;
 
 void criaFifo(const char *nome_fifo);
 int abreFifo(char *nome_fifo, bool modo);
