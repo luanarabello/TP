@@ -54,6 +54,7 @@ typedef struct
     int estado; // 0: agendado; 1: em curso; 2: concluído/cancelado
     int id;
     char nome_cliente[TAM_USER];
+    char fifo_cliente[TAM_MAX];
     char local_partida[TAM_MAX];
     int dist_total;
     pid_t pid_cli;

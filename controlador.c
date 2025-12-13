@@ -2,57 +2,47 @@
 #include <pthread.h>
 
 int fd_s;
+pthread_mutex_t trinco = PTHREAD_MUTEX_INITIALIZER;
+int total_kms=0;    
+int horas=0;
+int nveiculos = 0;
+
+Cliente tab_clientes[MAX_CLI];
+int total_clientes = 0;
+
+Servico tab_servicos[TAM_MAX];
+int total_servicos = 0;
 
 void trataSig(int i)
 {
     (void)i;
     fprintf(stderr, "\n[CONTROLADOR] A encerrar via sinal...\n");
+    printf("Admin > ");
     close(fd_s);
     unlink(FIFO_SERV);
     exit(EXIT_SUCCESS);
 }
-
-int utilizador_existe(char *user, Cliente *clientes, int total)
-{
-    for (int i = 0; i < total; i++)
-        if (clientes[i].ativo && strcmp(clientes[i].username, user) == 0)
-            return 1;
-    return 0;
-}
-
-int adiciona_cliente(char *user, Cliente *clientes, char *fifo, int *total)
-{
-    if ((*total) >= MAX_CLI)
-    {
-        printf("[ERRO] Lista cheia\n");
-        return 0;
-    }
-    strcpy(clientes[*total].username, user);
-    strcpy(clientes[*total].fifo_cliente, fifo);
-    clientes[*total].ativo = true;
-    (*total)++;
-    return 1;
-}
-
 void lancar_veiculo(Servico *s, char *fifo_cli)
 {
     int p[2];
 
     if (pipe(p) == -1)
     {
-        perror("[ERRO] Pipe falhou");
+        perror("\n[ERRO] Pipe falhou");
+        printf("Admin > ");
         return;
     }
 
     pid_t pid = fork();
     if (pid == -1)
     {
-        perror("[ERRO] Fork falhou");
+        perror("\n[ERRO] Fork falhou");
+        printf("Admin > ");
         return;
     }
 
     if (pid == 0)
-    { // --- FILHO ---
+    { //filho
         close(p[0]);
         dup2(p[1], STDOUT_FILENO);
         close(p[1]);
@@ -65,7 +55,7 @@ void lancar_veiculo(Servico *s, char *fifo_cli)
         exit(1);
     }
     else
-    { // --- PAI ---
+    { // pai
         close(p[1]);
         s->pipe_fd = p[0];
         s->pid_veiculo = pid;
@@ -74,34 +64,119 @@ void lancar_veiculo(Servico *s, char *fifo_cli)
         int flags = fcntl(s->pipe_fd, F_GETFL, 0);
         fcntl(s->pipe_fd, F_SETFL, flags | O_NONBLOCK);
 
-        printf("[SISTEMA] Veiculo lançado (PID: %d)\n", pid);
+        printf("\n[SISTEMA] Veiculo lançado (PID: %d)\n", pid);
+        printf("Admin > ");
     }
 }
+void *thread_relogio()
+{
+    char fifo_cli[TAM_MAX];
 
-// --- THREAD NOVA: Monitoriza os veículos constantemente ---
+    while (1)
+    {
+        sleep(1); 
+        
+        pthread_mutex_lock(&trinco);
+        horas++;
+
+        int ativos = 0;
+        for (int k = 0; k < total_servicos; k++) 
+            if (tab_servicos[k].estado == 1) ativos++;
+        
+
+        // verificar se há serviços agendados para esta hora (ou atrasados)
+        for (int k = 0; k < total_servicos; k++)
+        {
+            // Se está Agendado (0) E já chegou a hora
+            if (tab_servicos[k].estado == 0 && 
+                tab_servicos[k].inicio_servico.segundos <= horas)
+            {
+                if (ativos < nveiculos) // Temos carros livres
+                {
+                                      
+                    // Lança o veículo
+                    lancar_veiculo(&tab_servicos[k], tab_servicos[k].fifo_cliente);
+                }
+
+            }
+        }
+        pthread_mutex_unlock(&trinco);
+    }
+    return NULL;
+}
+int utilizador_existe(char *user, Cliente *clientes, int total)
+{
+    for (int i = 0; i < total; i++)
+        if (clientes[i].ativo && strcmp(clientes[i].username, user) == 0)
+            return 1;
+    return 0;
+}
+
+int adiciona_cliente(char *user, Cliente *clientes, char *fifo, int *total)
+{
+    if ((*total) >= MAX_CLI)
+    {
+        printf("\n[ERRO] Lista cheia\n");
+        printf("Admin > ");
+        return 0;
+    }
+    strcpy(clientes[*total].username, user);
+    strcpy(clientes[*total].fifo_cliente, fifo);
+    clientes[*total].ativo = true;
+    (*total)++;
+    return 1;
+}
+
+
+// monitoriza os veículos constantemente 
 void *thread_telemetria(void *arg)
 {
     TDATA_CLIENTES *ptd = (TDATA_CLIENTES *)arg;
     char buffer_veiculo[100];
+    int id_lido, valor_lido;
 
     while (1)
     {
         for (int k = 0; k < ptd->total_servicos; k++)
         {
-            // Se o serviço está "Em Curso" (estado 1)
+            // Só monitoriza veículos em movimento (Estado 1)
             if (ptd->lista_servicos[k].estado == 1)
             {
                 int n = read(ptd->lista_servicos[k].pipe_fd, buffer_veiculo, sizeof(buffer_veiculo) - 1);
+                
                 if (n > 0)
                 {
                     buffer_veiculo[n] = '\0';
-                    // \r limpa a linha atual para não estragar o prompt do admin
+
+                    if (sscanf(buffer_veiculo, "STATUS %d %d", &id_lido, &valor_lido) == 2)
+                    {
+                        pthread_mutex_lock(&trinco); // Protege a escrita nas globais
+
+                        ptd->lista_servicos[k].percorrido = valor_lido; 
+                        
+                        //soma 10% da distância a cada aviso
+                        total_kms += (int)(ptd->lista_servicos[k].dist_total * 0.1);
+
+                        pthread_mutex_unlock(&trinco);
+                    }
+
                     printf("\r[VEICULO %d]: %sAdmin > ", ptd->lista_servicos[k].id, buffer_veiculo);
                     fflush(stdout);
                 }
+                else if (n == 0) // Veículo acabou
+                {
+                    pthread_mutex_lock(&trinco);
+                    
+                    ptd->lista_servicos[k].estado = 2; // Concluído
+                    
+                    pthread_mutex_unlock(&trinco);
+                    
+                    close(ptd->lista_servicos[k].pipe_fd);
+                    ptd->lista_servicos[k].pipe_fd = -1;
+                }
             }
         }
-        usleep(100000); // Verifica a cada 0.1s
+        usleep(100000); 
     }
     return NULL;
 }
@@ -112,7 +187,8 @@ void *thread_clientes(void *arg)
     Pedido p;
     int fd_cli;
 
-    printf("[THREAD] Thread de clientes a correr...\n");
+    printf("\n[THREAD] Thread de clientes a correr...\n");
+    printf("Admin > ");
 
     while (1)
     {
@@ -125,10 +201,12 @@ void *thread_clientes(void *arg)
 
         if (p.tipo == REQ_LOGIN)
         {
+            pthread_mutex_lock(&trinco);
             int existe = utilizador_existe(p.username, ptd->clientes, ptd->total_clientes);
             int verifica = 0;
             if (!existe)
                 verifica = adiciona_cliente(p.username, ptd->clientes, p.fifo_cli, &ptd->total_clientes);
+            pthread_mutex_unlock(&trinco);
 
             fd_cli = open(p.fifo_cli, O_WRONLY);
             if (fd_cli != -1)
@@ -136,7 +214,8 @@ void *thread_clientes(void *arg)
                 if (verifica)
                 {
                     write(fd_cli, "LOGIN_OK", 9);
-                    printf("[LOGIN] Novo: %s\n", p.username);
+                    printf("\n[LOGIN] Novo: %s\n", p.username);
+                    printf("Admin > ");
                 }
                 else
                 {
@@ -148,26 +227,28 @@ void *thread_clientes(void *arg)
         else if (p.tipo == REQ_AGENDAR)
         {
             char resposta[TAM_MAX];
+            pthread_mutex_lock(&trinco);
             if (ptd->total_servicos < TAM_MAX)
             {
                 Servico *novo = &ptd->lista_servicos[ptd->total_servicos];
                 novo->id = ptd->total_servicos + 1;
                 strcpy(novo->nome_cliente, p.username);
+                strcpy(novo->fifo_cliente, p.fifo_cli);
                 novo->estado = 0;
                 novo->percorrido = 0;
                 novo->inicio_servico.segundos = p.hora;
                 novo->dist_total = p.distancia;
                 strcpy(novo->local_partida, p.local_partida);
+                sprintf(resposta, "Agendado (ID %d) para T=%d.", novo->id, p.hora);
 
-                lancar_veiculo(novo, p.fifo_cli);
-
-                ptd->total_servicos++;
-                sprintf(resposta, "Servico %d iniciado! Veiculo a caminho.", novo->id);
+                total_servicos++;
+                ptd->total_servicos = total_servicos;
             }
             else
             {
                 sprintf(resposta, "Erro: Frota cheia.");
             }
+            pthread_mutex_unlock(&trinco);
 
             fd_cli = open(p.fifo_cli, O_WRONLY);
             if (fd_cli != -1)
@@ -182,14 +263,13 @@ void *thread_clientes(void *arg)
             char linha[200];
             int encontrou = 0;
 
-            sprintf(lista_completa, "\n--- Servicos de %s ---\n", p.username);
+            sprintf(lista_completa, "\nServicos\n");
             for (int k = 0; k < ptd->total_servicos; k++)
             {
-                if (strcmp(ptd->lista_servicos[k].nome_cliente, p.username) == 0)
+                if (strcmp(ptd->lista_servicos[k].nome_cliente, p.username) == 0 && ptd->lista_servicos[k].estado == 0)
                 {
-                    char *st_str = (ptd->lista_servicos[k].estado == 1) ? "EM CURSO" : "TERMINADO/CANCELADO";
-                    sprintf(linha, "ID: %d | Origem: %s | Estado: %s\n",
-                            ptd->lista_servicos[k].id, ptd->lista_servicos[k].local_partida, st_str);
+                    sprintf(linha, "ID: %d | Origem: %s | Estado: Agendado\n",
+                            ptd->lista_servicos[k].id, ptd->lista_servicos[k].local_partida);
                     strcat(lista_completa, linha);
                     encontrou = 1;
                 }
@@ -208,6 +288,9 @@ void *thread_clientes(void *arg)
         {
             char res[TAM_MAX];
             int cancelados = 0;
+
+            pthread_mutex_lock(&trinco);
+
             for (int k = 0; k < ptd->total_servicos; k++)
             {
                 Servico *s = &ptd->lista_servicos[k];
@@ -224,6 +307,9 @@ void *thread_clientes(void *arg)
                     }
                 }
             }
+
+            pthread_mutex_unlock(&trinco);
+
             sprintf(res, "Cancelados: %d", cancelados);
             fd_cli = open(p.fifo_cli, O_WRONLY);
             if (fd_cli != -1)
@@ -232,24 +318,85 @@ void *thread_clientes(void *arg)
                 close(fd_cli);
             }
         }
+        else if (p.tipo == REQ_TERMINAR)
+        {
+            char resposta[TAM_MAX];
+            int tem_viagem_em_curso = 0;
+
+            pthread_mutex_lock(&trinco); // Bloqueia
+
+            //verificar se cliente existe e se tem viagens a andar 1
+            for (int k = 0; k < ptd->total_servicos; k++)
+            {
+                if (strcmp(ptd->lista_servicos[k].nome_cliente, p.username) == 0 && 
+                    ptd->lista_servicos[k].estado == 1)
+                {
+                    tem_viagem_em_curso = 1;
+                    break; 
+                }
+            }
+
+            if (tem_viagem_em_curso)
+            {
+                
+                sprintf(resposta, "ERRO: Tem uma viagem em curso. Aguarde que termine.");
+            }
+            else
+            {
+            
+                sprintf(resposta, "OK_SAIR");
+
+                // Encontrar o cliente e marcar como inativo
+                for (int i = 0; i < ptd->total_clientes; i++)
+                {
+                    if (strcmp(ptd->clientes[i].username, p.username) == 0)
+                    {
+                        ptd->clientes[i].ativo = false;
+                        printf("\n[LOGOUT] Utilizador saiu: %s\n", p.username);
+                        printf("Admin > ");
+                        break;
+                    }
+                }
+
+                // Cancelar  os agendados
+                
+                for (int k = 0; k < ptd->total_servicos; k++)
+                {
+                    if (strcmp(ptd->lista_servicos[k].nome_cliente, p.username) == 0 && 
+                        ptd->lista_servicos[k].estado == 0) 
+                    {
+                        ptd->lista_servicos[k].estado = 2; // Cancelado
+                        printf("\n[AUTO-CANCEL] Serviço %d (Agendado) cancelado.\n", ptd->lista_servicos[k].id);
+                        printf("Admin > ");
+                    }
+                }
+            }
+            
+            pthread_mutex_unlock(&trinco); 
+
+        
+            fd_cli = open(p.fifo_cli, O_WRONLY);
+            if (fd_cli != -1)
+            {
+                write(fd_cli, resposta, strlen(resposta) + 1);
+                close(fd_cli);
+            }
+        }
     }
-    return NULL;
 }
 
 int main(int argc, char *argv[])
 {
     (void)argc;
     (void)argv;
-    int i, nveiculos;
+    int i;
     char cmd[TAM_MAX];
     char mensagem[TAM_MAX];
 
-    Cliente tab_clientes[MAX_CLI];
-    Servico tab_servicos[TAM_MAX];
 
-    pthread_t tid_cli, tid_tel;
+    pthread_t tid_cli, tid_tel, tid_relogio;
     TDATA_CLIENTES t2_data;
-
+    setbuf(stdout, NULL); //para nao bloquear no scanf e fazer logo as validações
     memset(tab_clientes, 0, sizeof(tab_clientes));
     memset(tab_servicos, 0, sizeof(tab_servicos));
 
@@ -260,29 +407,26 @@ int main(int argc, char *argv[])
     }
 
     char *env = getenv("NVEICULOS");
-    nveiculos = env ? atoi(env) : 5;
+    if (env == NULL) {
+        fprintf(stderr, "[ERRO] A variavel NVEICULOS nao esta definida!\n");
+        return 1;
+    }
+    nveiculos = atoi(env);
+    if (access(FIFO_SERV, F_OK) == 0) 
+    {
+        fprintf(stderr, "[ERRO] O controlador ja esta a correr (ou o FIFO '%s' nao foi apagado)!\n", FIFO_SERV);
+        fprintf(stderr, "Apague o FIFO manualmente se nao houver nenhum controlador ativo.\n");
+        exit(1);
+    }
 
-    strcpy(tab_clientes[0].username, "Amanda");
-    tab_clientes[0].ativo = true;
-    strcpy(tab_clientes[1].username, "Jose");
-    tab_clientes[1].ativo = true;
-    strcpy(tab_clientes[2].username, "Luis");
-    tab_clientes[2].ativo = true;
+
 
     t2_data.clientes = tab_clientes;
-    t2_data.total_clientes = 3;
+    t2_data.total_clientes = 0;
     t2_data.lista_servicos = tab_servicos;
     t2_data.total_servicos = 0;
 
     criaFifo(FIFO_SERV);
-
-    // Lançar Threads
-    pthread_create(&tid_cli, NULL, thread_clientes, (void *)&t2_data);
-
-    // Nova Thread para Telemetria
-    pthread_create(&tid_tel, NULL, thread_telemetria, (void *)&t2_data);
-
-    printf("Controlador iniciado (NVeiculos: %d). Aguardando...\n", nveiculos);
 
     fd_s = open(FIFO_SERV, O_RDWR);
     if (fd_s == -1)
@@ -290,29 +434,91 @@ int main(int argc, char *argv[])
         perror("Erro FIFO");
         exit(1);
     }
+    // Lançar Threads
+    pthread_create(&tid_cli, NULL, thread_clientes, (void *)&t2_data);
+
+    pthread_create(&tid_tel, NULL, thread_telemetria, (void *)&t2_data);
+    pthread_create(&tid_relogio, NULL, thread_relogio, NULL);
+
+    printf("\nControlador iniciado (NVeiculos: %d). Aguardando...\n", nveiculos);
+
 
     while (1)
     {
-        // O printf tem \r para o output da thread não estragar o visual
-        printf("\rAdmin > ");
-        fflush(stdout);
+        printf("Admin > ");
 
         scanf("%s", cmd); // Scanf bloqueia aqui, mas as threads continuam a correr!
-
-        if (strcmp(cmd, "utiliz") == 0)
+        if (strcmp(cmd, "hora") == 0)
         {
+            printf("Hora do sistema: %d\n", horas);
+        }
+        else if (strcmp(cmd, "km") == 0)
+        {
+            pthread_mutex_lock(&trinco);
+            printf("Total Kms percorridos pela frota: %d\n", total_kms);
+            pthread_mutex_unlock(&trinco);
+        }
+        else if (strcmp(cmd, "frota") == 0)
+        {
+            pthread_mutex_lock(&trinco);
+            printf("--- Estado da Frota ---\n");
+            int ativos = 0;
+            for(int k=0; k<t2_data.total_servicos; k++) {
+                if(tab_servicos[k].estado == 1) { // Só os que estão a andar
+                    printf("Veiculo %d (Cliente: %s) -> %d%% completado\n", 
+                        tab_servicos[k].id, tab_servicos[k].nome_cliente, tab_servicos[k].percorrido);
+                    ativos++;
+                }
+            }
+            if(ativos==0) printf("Nenhum veiculo a circular.\n");
+            pthread_mutex_unlock(&trinco);
+        }
+        else if (strcmp(cmd, "cancelar") == 0)
+        {
+            int id_alvo;
+            // Lê o ID a seguir ao comando
+            if (scanf("%d", &id_alvo) == 1) 
+            {
+                pthread_mutex_lock(&trinco);
+                int count = 0;
+                for(int k=0; k<t2_data.total_servicos; k++) {
+                    // ID=0 apaga todos; ID especifico apaga so esse
+                    if((id_alvo == 0 || tab_servicos[k].id == id_alvo) && tab_servicos[k].estado != 2) {
+                        if(tab_servicos[k].estado == 1) kill(tab_servicos[k].pid_veiculo, SIGUSR1);
+                        tab_servicos[k].estado = 2; // Cancelado
+                        count++;
+                    }
+                }
+                printf("Cancelados %d servicos.\n", count);
+                pthread_mutex_unlock(&trinco);
+            } else {
+                 printf("Erro: Use 'cancelar <id>'\n");
+                 // Limpar buffer do scanf
+                 int c; while ((c = getchar()) != '\n' && c != EOF);
+            }
+        }
+        else if (strcmp(cmd, "utiliz") == 0)
+        {
+            pthread_mutex_lock(&trinco);
             printf("Clientes registados (%d):\n", t2_data.total_clientes);
             for (i = 0; i < MAX_CLI; i++)
             {
                 if (tab_clientes[i].ativo)
                     printf("- %s\n", tab_clientes[i].username);
             }
+            pthread_mutex_unlock(&trinco);
         }
         else if (strcmp(cmd, "listar") == 0)
         {
+            pthread_mutex_lock(&trinco);
+
             printf("--- Serviços (%d) ---\n", t2_data.total_servicos);
-            for (int k = 0; k < t2_data.total_servicos; k++)
-                printf("ID: %d | User: %s | Estado: %d\n", tab_servicos[k].id, tab_servicos[k].nome_cliente, tab_servicos[k].estado);
+            for (int k = 0; k < t2_data.total_servicos; k++){
+                if (tab_servicos[k].estado==0)
+                    printf("ID: %d | User: %s | Estado: %d\n", tab_servicos[k].id, tab_servicos[k].nome_cliente, tab_servicos[k].estado);
+            }
+                
+            pthread_mutex_unlock(&trinco);
         }
         else if (strcmp(cmd, "terminar") == 0)
         {
@@ -321,10 +527,10 @@ int main(int argc, char *argv[])
             {
                 if (tab_clientes[i].ativo)
                 {
-                    int fd_cli, n;
+                    int fd_cli;
                     sprintf(mensagem, "A desconectar...servidor terminou sessao.\n");
                     fd_cli = open(tab_clientes[i].fifo_cliente, O_WRONLY);
-                    n = write(fd_cli, mensagem, strlen(mensagem) + 1);
+                    write(fd_cli, mensagem, strlen(mensagem) + 1);
                     close(fd_cli);
                 }
                 else
@@ -332,12 +538,13 @@ int main(int argc, char *argv[])
                     break;
                 }
             }
-            // kill(0, SIGINT);
             break;
         }
         else
         {
             printf("Comando desconhecido.\n");
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
         }
     }
     printf("A encerrar servidor...\n");

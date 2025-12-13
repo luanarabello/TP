@@ -9,7 +9,7 @@ void *thread_leitura(void *arg)
     int fd;
     char buffer[TAM_MAX];
     int n;
-
+    setbuf(stdout, NULL);
     fd = open(ptd->nome_fifo, O_RDWR);
     if (fd == -1)
     {
@@ -25,13 +25,21 @@ void *thread_leitura(void *arg)
         if (n > 0)
         {
             buffer[n] = '\0';
+            if (strcmp(buffer, "OK_SAIR") == 0)
+            {
+                printf("\n[SISTEMA] Saida autorizada. A encerrar...\n");
+                desconecta=1;
+                pthread_kill(ptd->tid_main, SIGUSR2); // Acorda o main do scanf
+                break; // Sai do ciclo da thread
+            }
             if (strstr(buffer, "servidor terminou sessao")) // strstr() verifica substring numa string
             {
                 printf("\n\n[SERVIDOR]: %s\n", buffer);
-                break; // * Sai do loop infinito
+                break; 
             }
-            // Imprime o que chegou e repõe o prompt ">"
-            printf("\n\n[MENSAGEM]: %s\n> ", buffer);
+            // Imprime o que chegou
+            printf("\n\n[MENSAGEM]: %s\n ", buffer);
+            printf("> ");
             fflush(stdout);
         }
     }
@@ -77,7 +85,7 @@ int main(int argc, char *argv[])
 
     // criar FIFO do cliente
     memset(nome_fifo_cli, 0, sizeof(nome_fifo_cli));
-    sprintf(nome_fifo_cli, FIFO_CLI_FMT, argv[1]);
+    sprintf(nome_fifo_cli, "/tmp/fifo_%s_%d", argv[1], getpid());
 
     // Se falhar porque já existe ignora e continua
     if (mkfifo(nome_fifo_cli, 0666) == -1)
@@ -150,18 +158,28 @@ int main(int argc, char *argv[])
         usleep(100000);
 
         printf("\nOpcoes:\n");
-        printf(" agendar   <hora> <local> <distancia>\n");
-        printf(" consultar\n");
-        printf(" sair\n");
+        printf("agendar   <hora> <local> <distancia>\n");
+        printf("cancelar<id>\n");
+        printf("consultar\n");
+        printf("terminar(execucao)\n");
         printf("> ");
 
         scanf("%s", cmd); // bloqueia com o SIGUSR2
-
         if (desconecta)
             break;
-
-        if (strcmp(cmd, "sair") == 0)
+        else if (strcmp(cmd, "terminar") == 0)
         {
+            p.tipo = REQ_TERMINAR;
+            strcpy(p.username, argv[1]);
+            strcpy(p.fifo_cli, nome_fifo_cli);
+            
+            // 1. Envia pedido
+            write(fd_serv, &p, sizeof(Pedido));
+            printf("A aguardar autorizacao do servidor...\n");
+            while (!desconecta) {
+                pause(); 
+            }
+
             break;
         }
         else if (strcmp(cmd, "agendar") == 0)
@@ -209,6 +227,8 @@ int main(int argc, char *argv[])
         else
         {
             printf("Comando desconhecido: %s\n", cmd);
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF); //comandos errados com varias palavras
         }
     }
 

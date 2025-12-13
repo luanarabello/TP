@@ -3,8 +3,8 @@
 int main(int argc, char *argv[])
 {
     // Argumentos esperados: ./veiculo <id_servico> <fifo_cliente> <distancia>
-    if (argc < 4) {
-        fprintf(stderr, "[VEICULO] Erro: Argumentos insuficientes.\n");
+    if (argc != 4) {
+        printf("Uso: ./veiculo <id> <fifo_cli> <distancia>\n");        
         return 1;
     }
 
