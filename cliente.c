@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 
         printf("\nOpcoes:\n");
         printf("agendar   <hora> <local> <distancia>\n");
-        printf("cancelar<id>\n");
+        printf("cancelar <id>\n");
         printf("consultar\n");
         printf("terminar(execucao)\n");
         printf("> ");

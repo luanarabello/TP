@@ -512,7 +512,7 @@ int main(int argc, char *argv[])
         {
             pthread_mutex_lock(&trinco);
 
-            printf("--- Serviços (%d) ---\n", t2_data.total_servicos);
+            printf("Serviços\n", t2_data.total_servicos);
             for (int k = 0; k < t2_data.total_servicos; k++){
                 if (tab_servicos[k].estado==0)
                     printf("ID: %d | User: %s | Estado: %d\n", tab_servicos[k].id, tab_servicos[k].nome_cliente, tab_servicos[k].estado);

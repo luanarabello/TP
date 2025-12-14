@@ -36,10 +36,10 @@
 typedef struct
 {
     char username[TAM_USER];
-    // int pid_cli; -acho que nao é preciso
+    int pid_cli; 
     char fifo_cliente[NOME_FIFO];
     bool ativo;
-    // Veiculo *automovel;
+    
 } Cliente;
 
 typedef struct

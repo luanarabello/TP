@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
     char *fifo_cli = argv[2];
     int distancia_total = atoi(argv[3]);
     int percorrido = 0;
-    int percentagem = 0;
+    int percentagem = 0,nova,percentagem_reportada=0;
     int fd_cli;
 
     // avisar o cliente que o veículo chegou
@@ -32,25 +32,33 @@ int main(int argc, char *argv[])
     fprintf(stdout, "INICIO %d %d\n", id_servico, distancia_total); // Avisa controlador
     fflush(stdout); // Obriga a escrever logo
 
-    while (percorrido < distancia_total) {
-        sleep(1); // Espera 1 segundo (simula tempo a andar)
+while (percorrido < distancia_total) {
+        // ... (Verificação de SIGUSR1, se aplicável) ...
+        
+        sleep(1); 
         percorrido++;
 
-        int nova_perc = (percorrido * 100) / distancia_total;
+    
+        nova = (percorrido * 100) / distancia_total; 
+        
+        
+        
+        int marco_atual = (nova / 10) * 10;
+        
+        if (marco_atual > percentagem_reportada) {
+            
+            percentagem_reportada = marco_atual; 
 
-        // a cada 10% avisa o controlador
-        if (nova_perc / 10 > percentagem / 10) {
-            fprintf(stdout, "STATUS %d %d\n", id_servico, nova_perc);
+            fprintf(stdout, "STATUS %d %d\n", id_servico, percentagem_reportada);
             fflush(stdout);
         }
-        percentagem = nova_perc;
     }
 
     // fim da viagem
     fprintf(stdout, "CONCLUIDO %d\n", id_servico);
     fflush(stdout);
 
-    // Avisar cliente final cagativo mas fica bonitinho
+    // Avisar cliente final  mas fica bonitinho
     fd_cli = open(fifo_cli, O_WRONLY);
     if (fd_cli != -1) {
         write(fd_cli, "VIAGEM TERMINADA", 17);
